@@ -119,5 +119,8 @@ if __name__ == '__main__':
     application.add_handler(start_handler)
     application.add_handler(msg_handler)
 
-    application.run_webhook(listen=WEBHOOK_ADDR, port=80, url_path=WEBHOOK_PATH, webhook_url=WEBHOOK_URL,
-                            secret_token=SECRET_TOKEN)
+    if WEBHOOK_URL:
+        application.run_webhook(listen=WEBHOOK_ADDR, port=80, url_path=WEBHOOK_PATH, webhook_url=WEBHOOK_URL,
+                                secret_token=SECRET_TOKEN)
+    else:
+        application.run_polling()
