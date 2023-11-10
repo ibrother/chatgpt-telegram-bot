@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "chatgpt-tgbot"
+version = "0.4.0"
+description = ""
+authors = ["ibrother <admin@taoluyun.net>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+openai = "^1.2.0"
+python-telegram-bot = {extras = ["webhooks"], version = "^20.6"}
+tiktoken = "^0.5.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

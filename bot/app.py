@@ -8,9 +8,9 @@
 """
 import logging
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 
-import openai
+from openai import AsyncOpenAI
 import tiktoken
 from telegram import Update
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
@@ -20,14 +20,14 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = AsyncOpenAI()
 MODEL = os.getenv("MODEL", "gpt-3.5-turbo")
 
 # Define a dictionary to store messages for each user
-user_conversation = defaultdict(list)
+user_conversation = defaultdict(lambda: {'messages': deque(), 'tokens': 0})
 
 # Define the tokens limit
-MAX_TOKENS_PER_MESSAGE = os.getenv("MAX_TOKENS", 4907)
+MAX_TOKENS_PER_MESSAGE = int(os.getenv("MAX_TOKENS", 4096))
 
 # Define your bot
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -55,6 +55,7 @@ def num_tokens_from_messages(messages, model=MODEL):
         "gpt-4-32k-0314",
         "gpt-4-0613",
         "gpt-4-32k-0613",
+        "gpt-4-1106-preview",
         }:
         tokens_per_message = 3
         tokens_per_name = 1
@@ -89,11 +90,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Define the async function to call the ChatGPT API
 async def call_openai_chatgpt(message):
-    resp = await openai.ChatCompletion.acreate(
+    resp = await client.chat.completions.create(
         model=MODEL,
         messages=message
     )
-    return resp['choices'][0]['message']
+    return resp
 
 
 # Define the handler for incoming messages
@@ -106,28 +107,33 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Get the user ID
         user_id = update.message.from_user.id
 
-        new_message = [{"role": "user", "content": update.message.text}]
+        new_message = {"role": "user", "content": update.message.text}
+        new_message_tokens = num_tokens_from_messages([new_message])
 
-        if num_tokens_from_messages(new_message) > MAX_TOKENS_PER_MESSAGE:
-            reply_message = "Sorry, your message is too long to process!"
+        if new_message_tokens > MAX_TOKENS_PER_MESSAGE:
+            reply_content = "Sorry, your message is too long to process!"
         else:
-            # Append the message to the user's list
-            user_conversation[user_id].append(new_message[0])
+            conversation_data = user_conversation[user_id]
+            conversation_data['messages'].append(new_message)
+            conversation_data['tokens'] += new_message_tokens
 
-            # Check if the total number of tokens in the conversation exceeds the limit
-            while num_tokens_from_messages(user_conversation[user_id]) > MAX_TOKENS_PER_MESSAGE:
-                # Remove the first two elements from the list
-                if len(user_conversation[user_id]) >= 2:
-                    user_conversation[user_id] = user_conversation[user_id][2:]
+            # 如果超出tokens限制，则移除旧消息直至满足限制
+            while conversation_data['tokens'] > MAX_TOKENS_PER_MESSAGE:
+                # 移除最旧的消息，并更新tokens计数
+                oldest_message = conversation_data['messages'].popleft()
+                oldest_message_tokens = num_tokens_from_messages([oldest_message])
+                conversation_data['tokens'] -= oldest_message_tokens
 
             # Call the API endpoint and send the response back to the user
-            api_response = await call_openai_chatgpt(user_conversation[user_id])
-            reply_message = api_response['content']
+            api_response = await call_openai_chatgpt(list(conversation_data['messages']))
+            reply_message = api_response.choices[0].message
+            reply_content = reply_message.content
 
             # Append the response to the user's list
-            user_conversation[user_id].append(api_response)
+            conversation_data['messages'].append(reply_message)
+            conversation_data['tokens'] += api_response.usage.completion_tokens
 
-        await context.bot.send_message(chat_id=chat_id, text=reply_message,
+        await context.bot.send_message(chat_id=chat_id, text=reply_content,
                                        reply_to_message_id=update.message.message_id)
 
 
