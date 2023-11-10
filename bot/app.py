@@ -20,7 +20,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-client = AsyncOpenAI()
+client = AsyncOpenAI(base_url=os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"))
 MODEL = os.getenv("MODEL", "gpt-3.5-turbo")
 
 # Define a dictionary to store messages for each user
