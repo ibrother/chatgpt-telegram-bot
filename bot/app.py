@@ -90,20 +90,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Define the async function to call the ChatGPT API
 async def call_openai_chatgpt(message):
-    resp = await client.chat.completions.create(
-        model=MODEL,
-        messages=message
-    )
-    return resp
+    return await client.chat.completions.create(model=MODEL, messages=message)
 
 
 # Define the handler for incoming messages
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if the message is sent in a private chat or in a group chat with the bot
     chat_id = update.message.chat.id
-    if (update.message.chat.type == 'private' and chat_id in authorized_user_ids) or (
-            update.message.chat.type == 'supergroup' and chat_id in authorized_group_ids and '@{}'.format(
-            context.bot.username) in update.message.text):
+    if (
+        (
+            update.message.chat.type == 'private'
+            and chat_id in authorized_user_ids
+        )
+        or update.message.chat.type == 'supergroup'
+        and chat_id in authorized_group_ids
+        and f'@{context.bot.username}' in update.message.text
+    ):
         # Get the user ID
         user_id = update.message.from_user.id
 
